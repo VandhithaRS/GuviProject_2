@@ -1,310 +1,351 @@
-import os
-import json
+# pip install mysql-connector-python
+# pip install streamlit plotly mysql-connector-python
+# pip install streamlit
+# pip install streamlit_extras
+
+import mysql.connector
+import pandas as pd
+# import psycopg2
+import streamlit as st
+import PIL
 from PIL import Image
+from streamlit_option_menu import option_menu
 import plotly.express as px
 import pandas as pd
-import streamlit as st
-from streamlit_option_menu import option_menu
-from sqlalchemy import create_engine
-import mysql.connector as sql
+import matplotlib.pyplot as plt
+import requests
+import geopandas as gpd
+# connect to the database
+
+import mysql.connector
+
+# establishing the connection
+conn = mysql.connector.connect(user='root', password='Momprincess@13', host='127.0.0.1', database="phonepe")
+
+# create a cursor object
+cursor = conn.cursor()
+
+# with st.headbar:
+SELECT = option_menu(
+    menu_title=None,
+    options=["About", "Home", "Top Charts", "Explore Data", "Contact"],
+    icons=["exclamation-circle", "house", "bar-chart", "toggles", "at"],
+    default_index=2,
+    orientation="horizontal",
+    styles={"container": {"padding": "0!important", "background-color": "white", "size": "cover", "width": "100"},
+            "icon": {"color": "black", "font-size": "20px"},
+
+            "nav-link": {"font-size": "20px", "text-align": "center", "margin": "-2px", "--hover-color": "#6F36AD"},
+            "nav-link-selected": {"background-color": "#6F36AD"}})
+
+# ----------------Home----------------------#
+cursor = conn.cursor()
+
+# execute a SELECT statement
+cursor.execute("SELECT * FROM agg_trans")
+
+# fetch all rows
+rows = cursor.fetchall()
+from streamlit_extras.add_vertical_space import add_vertical_space
+
+if SELECT == "Home":
+    col1, col2, = st.columns(2)
+    col1.image(Image.open("C:\\Users\\VANDHITHA\\OneDrive\\Desktop\\Phonepe_image2.png"), width=300)
+    with col1:
+        st.subheader(
+            "PhonePe  is an Indian digital payments and financial technology company headquartered in Bengaluru, Karnataka, India. PhonePe was founded in December 2015, by Sameer Nigam, Rahul Chari and Burzin Engineer. The PhonePe app, based on the Unified Payments Interface (UPI), went live in August 2016. It is owned by Flipkart, a subsidiary of Walmart.")
+        st.download_button("DOWNLOAD THE APP NOW", "https://www.phonepe.com/app-download/")
+    with col2:
+        st.video("C:\\Users\\VANDHITHA\\OneDrive\\Desktop\\upi.mp4")
+
+# ----------------TOP CHARTS----------------------#
+
+# MENU 2 - TOP CHARTS
+if SELECT == "Top Charts":
+    st.markdown("## :violet[Top Charts]")
+    Type = st.selectbox("**Type**", ("Transactions", "Users"))
+    colum1, colum2 = st.columns([1, 1.8], gap="medium")
+    with colum1:
+        Year = st.slider("**Year**", min_value=2018, max_value=2022)
+        Quarter = st.slider("Quarter", min_value=1, max_value=4)
+
+    with colum2:
+        st.info(
+            """
+            #### From this menu we can get insights like :
+            - Overall ranking on a particular Year and Quarter.
+            - Top 10 State, District, Pincode based on Total number of transaction and Total amount spent on phonepe.
+            - Top 10 State, District, Pincode based on Total phonepe users and their app opening frequency.
+            - Top 10 mobile brands and its percentage based on the how many people use phonepe.
+            """, icon="🔍"
+        )
+
+    # Top Charts - TRANSACTIONS
+    if Type == "Transactions":
+        col1, col2 = st.columns([1, 1], gap="medium")
+
+        with col1:
+            st.markdown("### :violet[State]")
+            cursor.execute(
+                f"select state, sum(Transaction_count) as Total_Transactions_Count, sum(Transaction_amount) as Total from agg_trans where year = {Year} and quarter = {Quarter} group by state order by Total desc limit 10")
+            df = pd.DataFrame(cursor.fetchall(), columns=['State', 'Transactions_Count', 'Total_Amount'])
+            fig = px.pie(df, values='Total_Amount',
+                         names='State',
+                         title='Top 10',
+                         color_discrete_sequence=px.colors.sequential.Agsunset,
+                         hover_data=['Transactions_Count'],
+                         labels={'Transactions_Count': 'Transactions_Count'})
+
+            fig.update_traces(textposition='inside', textinfo='percent+label')
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            st.markdown("### :violet[District]")
+            cursor.execute(
+                f"select district , sum(Count) as Total_Count, sum(Amount) as Total from map_trans where year = {Year} and quarter = {Quarter} group by district order by Total desc limit 10")
+            df = pd.DataFrame(cursor.fetchall(), columns=['District', 'Transactions_Count', 'Total_Amount'])
+
+            fig = px.pie(df, values='Total_Amount',
+                         names='District',
+                         title='Top 10',
+                         color_discrete_sequence=px.colors.sequential.Agsunset,
+                         hover_data=['Transactions_Count'],
+                         labels={'Transactions_Count': 'Transactions_Count'})
+
+            fig.update_traces(textposition='inside', textinfo='percent+label')
+            st.plotly_chart(fig, use_container_width=True)
+
+    # Top Charts - USERS
+    if Type == "Users":
+        col1, col2, col3 = st.columns([2, 2, 2], gap="medium")
+
+        with col1:
+            st.markdown("### :violet[Brands]")
+            if Year == 2022 and Quarter in [2, 3, 4]:
+                st.markdown("#### Sorry No Data to Display for 2022 Qtr 2,3,4")
+            else:
+                cursor.execute(
+                    f"select brands, sum(count) as Total_Count, avg(percentage)*100 as Avg_Percentage from agg_user where year = {Year} and quarter = {Quarter} group by brands order by Total_Count desc limit 10")
+                df = pd.DataFrame(cursor.fetchall(), columns=['Brand', 'Total_Users', 'Avg_Percentage'])
+                fig = px.bar(df,
+                             title='Top 10',
+                             x="Total_Users",
+                             y="Brand",
+                             orientation='h',
+                             color='Avg_Percentage',
+                             color_continuous_scale=px.colors.sequential.Agsunset)
+                st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            st.markdown("### :violet[District]")
+            cursor.execute(
+                f"select district, sum(RegisteredUser) as Total_Users, sum(AppOpens) as Total_Appopens from map_user where year = {Year} and quarter = {Quarter} group by district order by Total_Users desc limit 10")
+            df = pd.DataFrame(cursor.fetchall(), columns=['District', 'Total_Users', 'Total_Appopens'])
+            df.Total_Users = df.Total_Users.astype(float)
+            fig = px.bar(df,
+                         title='Top 10',
+                         x="Total_Users",
+                         y="District",
+                         orientation='h',
+                         color='Total_Users',
+                         color_continuous_scale=px.colors.sequential.Agsunset)
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col3:
+            st.markdown("### :violet[State]")
+            cursor.execute(
+                f"select state, sum(Registereduser) as Total_Users, sum(AppOpens) as Total_Appopens from map_user where year = {Year} and quarter = {Quarter} group by state order by Total_Users desc limit 10")
+            df = pd.DataFrame(cursor.fetchall(), columns=['State', 'Total_Users', 'Total_Appopens'])
+            fig = px.pie(df, values='Total_Users',
+                         names='State',
+                         title='Top 10',
+                         color_discrete_sequence=px.colors.sequential.Agsunset,
+                         hover_data=['Total_Appopens'],
+                         labels={'Total_Appopens': 'Total_Appopens'})
+
+            fig.update_traces(textposition='inside', textinfo='percent+label')
+            st.plotly_chart(fig, use_container_width=True)
+
+# ----------------EXPLORE DATA----------------------#
 
 
-# DataBase connection 
-mydb=sql.connect(host='localhost',port=3306,user='root',password='Momprincess@13',database='phonepe')
-mycursor = mydb.cursor(buffered=True)
-cursor = mydb.cursor()
+# MENU 3 - EXPLORE DATA
+if SELECT == "Explore Data":
+    Year = st.slider("**Year**", min_value=2018, max_value=2022)
+    Quarter = st.slider("Quarter", min_value=1, max_value=4)
+    Type = st.selectbox("**Type**", ("Transactions", "Users"))
+    col1, col2 = st.columns(2)
+
+    # EXPLORE DATA - TRANSACTIONS
+    if Type == "Transactions":
+        # Overall State Data - TRANSACTIONS AMOUNT - INDIA MAP
+        with col1:
+            st.markdown("## :violet[Overall State Data - Transactions Amount]")
+            cursor.execute(
+                f"select state, sum(count) as Total_Transactions, sum(amount) as Total_amount from map_trans where year = {Year} and quarter = {Quarter} group by state order by state")
+            df1 = pd.DataFrame(cursor.fetchall(), columns=['State', 'Total_Transactions', 'Total_amount'])
+            df2 = pd.read_csv(r"C:\\Users\\VANDHITHA\\OneDrive\\Desktop\\Statenames.csv")
+            df2.State = df1
+
+            fig = px.choropleth(df1,
+                                geojson="https://gist.githubusercontent.com/jbrobst/56c13bbbf9d97d187fea01ca62ea5112/raw/e388c4cae20aa53cb5090210a42ebb9b765c0a36/india_states.geojson",
+                                featureidkey='properties.ST_NM',
+                                locations='State',
+                                color='Total_amount',
+                                color_continuous_scale='sunset')
+
+            fig.update_geos(fitbounds="locations", visible=True)
+            st.plotly_chart(fig, use_container_width=True)
+
+        # Overall State Data - TRANSACTIONS COUNT - INDIA MAP
+        with col2:
+            st.markdown("## :violet[Overall State Data - Transactions Count]")
+            cursor.execute(
+                f"select state, sum(count) as Total_Transactions, sum(amount) as Total_amount from map_trans where year = {Year} and quarter = {Quarter} group by state order by state")
+            df1 = pd.DataFrame(cursor.fetchall(), columns=['State', 'Total_Transactions', 'Total_amount'])
+            df2 = pd.read_csv(r"C:\\Users\\VANDHITHA\\OneDrive\\Desktop\\Statenames.csv")
+            df1.Total_Transactions = df1.Total_Transactions.astype(int)
+            df2.State = df1
+
+            fig = px.choropleth(df1,
+                                geojson="https://gist.githubusercontent.com/jbrobst/56c13bbbf9d97d187fea01ca62ea5112/raw/e388c4cae20aa53cb5090210a42ebb9b765c0a36/india_states.geojson",
+                                featureidkey='properties.ST_NM',
+                                locations='State',
+                                color='Total_Transactions',
+                                color_continuous_scale='sunset')
+
+            fig.update_geos(fitbounds="locations", visible=False)
+            st.plotly_chart(fig, use_container_width=True)
+
+        # BAR CHART - TOP PAYMENT TYPE
+        st.markdown("## :violet[Top Payment Type]")
+        cursor.execute(
+            f"select Transaction_type, sum(Transaction_count) as Total_Transactions, sum(Transaction_amount) as Total_amount from agg_trans where year= {Year} and quarter = {Quarter} group by transaction_type order by Transaction_type")
+        df = pd.DataFrame(cursor.fetchall(), columns=['Transaction_type', 'Total_Transactions', 'Total_amount'])
+
+        fig = px.bar(df,
+                     title='Transaction Types vs Total_Transactions',
+                     x="Transaction_type",
+                     y="Total_Transactions",
+                     orientation='v',
+                     color='Total_amount',
+                     color_continuous_scale=px.colors.sequential.Agsunset)
+        st.plotly_chart(fig, use_container_width=False)
+
+        # BAR CHART TRANSACTIONS - DISTRICT WISE DATA
+        st.markdown("# ")
+        st.markdown("# ")
+        st.markdown("# ")
+        st.markdown("## :violet[Select any State to explore more]")
+        selected_state = st.selectbox("",
+                                      ('andaman-&-nicobar-islands', 'andhra-pradesh', 'arunachal-pradesh', 'assam',
+                                       'bihar',
+                                       'chandigarh', 'chhattisgarh', 'dadra-&-nagar-haveli-&-daman-&-diu', 'delhi',
+                                       'goa', 'gujarat', 'haryana',
+                                       'himachal-pradesh', 'jammu-&-kashmir', 'jharkhand', 'karnataka', 'kerala',
+                                       'ladakh', 'lakshadweep',
+                                       'madhya-pradesh', 'maharashtra', 'manipur', 'meghalaya', 'mizoram',
+                                       'nagaland', 'odisha', 'puducherry', 'punjab', 'rajasthan', 'sikkim',
+                                       'tamil-nadu', 'telangana', 'tripura', 'uttar-pradesh', 'uttarakhand',
+                                       'west-bengal'), index=30)
+
+        cursor.execute(
+            f"select State, District,year,quarter, sum(count) as Total_Transactions, sum(amount) as Total_amount from map_trans where year = {Year} and quarter = {Quarter} and State = '{selected_state}' group by State, District,year,quarter order by state,district")
+
+        df1 = pd.DataFrame(cursor.fetchall(), columns=['State', 'District', 'Year', 'Quarter',
+                                                       'Total_Transactions', 'Total_amount'])
+        fig = px.bar(df1,
+                     title=selected_state,
+                     x="District",
+                     y="Total_Transactions",
+                     orientation='v',
+                     color='Total_amount',
+                     color_continuous_scale=px.colors.sequential.Agsunset)
+        st.plotly_chart(fig, use_container_width=True)
+
+    # EXPLORE DATA - USERS
+    if Type == "Users":
+        # Overall State Data - TOTAL APPOPENS - INDIA MAP
+        st.markdown("## :violet[Overall State Data - User App opening frequency]")
+        cursor.execute(
+            f"select state, sum(RegisteredUser) as Total_Users, sum(AppOpens) as Total_Appopens from map_user where year = {Year} and quarter = {Quarter} group by state order by state")
+        df1 = pd.DataFrame(cursor.fetchall(), columns=['State', 'Total_Users', 'Total_Appopens'])
+        df2 = pd.read_csv(r"C:\\Users\\VANDHITHA\\OneDrive\\Desktop\\Statenames.csv")
+        df1.Total_Appopens = df1.Total_Appopens.astype(float)
+        df2.State = df1
+
+        # BAR CHART TOTAL UERS - DISTRICT WISE DATA 
+        st.markdown("## :violet[Select any State to explore more]")
+        selected_state = st.selectbox("",
+                                      ('andaman-&-nicobar-islands', 'andhra-pradesh', 'arunachal-pradesh', 'assam',
+                                       'bihar',
+                                       'chandigarh', 'chhattisgarh', 'dadra-&-nagar-haveli-&-daman-&-diu', 'delhi',
+                                       'goa', 'gujarat', 'haryana',
+                                       'himachal-pradesh', 'jammu-&-kashmir', 'jharkhand', 'karnataka', 'kerala',
+                                       'ladakh', 'lakshadweep',
+                                       'madhya-pradesh', 'maharashtra', 'manipur', 'meghalaya', 'mizoram',
+                                       'nagaland', 'odisha', 'puducherry', 'punjab', 'rajasthan', 'sikkim',
+                                       'tamil-nadu', 'telangana', 'tripura', 'uttar-pradesh', 'uttarakhand',
+                                       'west-bengal'), index=30)
+
+        cursor.execute(
+            f"select State,year,quarter,District,sum(Registereduser) as Total_Users, sum(AppOpens) as Total_Appopens from map_user where year = {Year} and quarter = {Quarter} and state = '{selected_state}' group by State, District,year,quarter order by state,district")
+
+        df = pd.DataFrame(cursor.fetchall(),
+                          columns=['State', 'year', 'quarter', 'District', 'Total_Users', 'Total_Appopens'])
+        df.Total_Users = df.Total_Users.astype(int)
+
+        fig = px.bar(df,
+                     title=selected_state,
+                     x="District",
+                     y="Total_Users",
+                     orientation='v',
+                     color='Total_Users',
+                     color_continuous_scale=px.colors.sequential.Agsunset)
+        st.plotly_chart(fig, use_container_width=True)
+
+    # ----------------About-----------------------#
+
+if SELECT == "About":
+    col1, col2 = st.columns(2)
+    with col1:
+        st.video("C:\\Users\\VANDHITHA\\OneDrive\\Desktop\\pulse-video.mp4")
+    with col2:
+        st.image(Image.open("C:\\Users\\VANDHITHA\\OneDrive\\Desktop\\Phonepe_image2.png"), width=500)
+        st.write("---")
+        st.subheader("The Indian digital payments story has truly captured the world's imagination."
+                     " From the largest towns to the remotest villages, there is a payments revolution being driven by the penetration of mobile phones, mobile internet and states-of-the-art payments infrastructure built as Public Goods championed by the central bank and the government."
+                     " Founded in December 2015, PhonePe has been a strong beneficiary of the API driven digitisation of payments in India. When we started, we were constantly looking for granular and definitive data sources on digital payments in India. "
+                     "PhonePe Pulse is our way of giving back to the digital payments ecosystem.")
+    st.write("---")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.title("THE BEAT OF PHONEPE")
+        st.write("---")
+        st.subheader("Phonepe became a leading digital payments company")
+        st.image(Image.open("C:\\Users\\VANDHITHA\\OneDrive\\Desktop\\about_phonepe.jpg"), width=400)
+        with open("C:\\Users\\VANDHITHA\\OneDrive\\Desktop\\about_phonepe1.png", "rb") as f:
+            data = f.read()
+        st.download_button("DOWNLOAD REPORT", data, file_name="annual report.pdf")
+    with col2:
+        st.image(Image.open("C:\\Users\\VANDHITHA\\OneDrive\\Desktop\\about_phonepe1.png"), width=800)
+
+# ----------------------Contact---------------#
+
+
+if SELECT == "Contact":
+    Name = (f'{"Name :"}  {"Vandhitha RS"}')
+    mail = (f'{"Mail :"}  {"rsvandhitha@gmail.com"}')
+    description = "An Aspiring DATA-SCIENTIST..!"
+
+    st.subheader(Name)
+    st.subheader(mail)
+    st.title('Phonepe Pulse data visualisation')
+    st.write(
+            "The goal of this project is to extract data from the Phonepe pulse Github repository, transform and clean the data, insert it into a MySQL database, and create a live geo visualization dashboard using Streamlit and Plotly in Python. The dashboard will display the data in an interactive and visually appealing manner, with at least 10 different dropdown options for users to select different facts and figures to display. The solution must be secure, efficient, and user-friendly, providing valuable insights and information about the data in the Phonepe pulse Github repository.")
+    st.write("---")
+
+    st.write("#")
 
 
 
-Path_1=r"C:\\phonepe\\pulse\\data\\aggregated\\transaction\\country\\india\\state\\"
-agg_trans_list = os.listdir(Path_1)
-
-columns_1 = {'State': [], 'Year': [], 'Quarter': [], 'Transaction_type': [], 'Transaction_count': [],
-            'Transaction_amount': []}
-for state in agg_trans_list:
-    cur_state = Path_1 + state + "/"
-    agg_year_list = os.listdir(cur_state)
-    
-    for year in agg_year_list:
-        cur_year = cur_state + year + "/"
-        agg_file_list = os.listdir(cur_year)
-        
-        for file in agg_file_list:
-            cur_file = cur_year + file
-            data = open(cur_file, 'r')
-            A = json.load(data)
-            try:  
-                for i in A['data']['transactionData']:
-                    name = i['name']
-                    count = i['paymentInstruments'][0]['count']
-                    amount = i['paymentInstruments'][0]['amount']
-                    columns_1['Transaction_type'].append(name)
-                    columns_1['Transaction_count'].append(count)
-                    columns_1['Transaction_amount'].append(amount)
-                    columns_1['State'].append(state)
-                    columns_1['Year'].append(year)
-                    columns_1['Quarter'].append(int(file.strip('.json')))
-            except:
-                pass
-                
-df_agg_trans = pd.DataFrame(columns_1)
-print(df_agg_trans)
-
-mycursor.execute("CREATE TABLE IF NOT EXISTS aggregated_trans(State varchar(100), Year int, Quarter int, Transaction_type varchar(100), Transaction_count int, Transaction_amount double)")
-for i,row in df_agg_trans.iterrows():
-    sql = "INSERT INTO aggregated_trans VALUES (%s,%s,%s,%s,%s,%s)"
-    mycursor.execute(sql, tuple(row))
-    mydb.commit()
-
-
-Path_2 =r"C:\\phonepe\\pulse\\data\\aggregated\\transaction\\country\\india\\state\\"
-agg_user_list = os.listdir(Path_2)
-
-columns_2 = {'State': [], 'Year': [], 'Quarter': [], 'Brands': [], 'Count': [], 'Percentage': []}
-for state in agg_user_list:
-    cur_state = Path_2 + state + "/"
-    agg_year_list = os.listdir(cur_state)
-
-    for year in agg_year_list:
-        cur_year = cur_state + year + "/"
-        agg_file_list = os.listdir(cur_year)
-
-        for file in agg_file_list:
-            cur_file = cur_year + file
-            data = open(cur_file, 'r')
-            B = json.load(data)
-            try:
-                for i in B["data"]["usersByDevice"]:
-                    brand_name = i["brand"]
-                    counts = i["count"]
-                    percents = i["percentage"]
-                    columns_2["Brands"].append(brand_name)
-                    columns_2["Count"].append(counts)
-                    columns_2["Percentage"].append(percents)
-                    columns_2["State"].append(state)
-                    columns_2["Year"].append(year)
-                    columns_2["Quarter"].append(int(file.strip('.json')))
-            except:
-                pass
-df_agg_user = pd.DataFrame(columns_2)
-print(df_agg_user)
-
-mycursor.execute("CREATE TABLE IF NOT EXISTS aggregate_user (State varchar(100), Year int, Quarter int, Brands varchar(100), Count int, Percentage double)")
-for i,row in df_agg_user.iterrows():
-    sql = "INSERT INTO aggregate_user VALUES (%s,%s,%s,%s,%s,%s)"
-    mycursor.execute(sql,tuple(row))
-    mydb.commit()
-
-
-Path_3 =r"C:\\phonepe\\pulse\\data\\aggregated\\transaction\\country\\india\\state\\"
-map_Tran_List = os.listdir(Path_3)
-columns_3 = {'State':[], 'Year':[], 'Quarter':[], 'District':[], 'Count':[], 'Amount':[]}
-for state in map_Tran_List:
-    cur_state = Path_3 + state + "/"
-    map_year_list =os.listdir(cur_state)
-    
-    for year in map_year_list:
-        cur_year =  cur_state+ year + "/"
-        map_file_list = os.listdir(cur_year)
-        
-        for file in map_file_list:
-            cur_file = cur_year +file
-            data = open(cur_file,'r')
-            c = json.load(data)
-            try:
-                for i in c["data"]["hoverDataList"]:
-                    district = i["name"]
-                    count = i["metric"][0]["count"]
-                    amount = i["metric"][0]["amount"]
-                    columns_3["District"].append(district)
-                    columns_3["Count"].append(count)
-                    columns_3["Amount"].append(amount)
-                    columns_3['State'].append(state)
-                    columns_3['Year'].append(year)
-                    columns_3['Quarter'].append(int(file.strip('.json')))
-            except:
-                pass
-Map_Trans = pd.DataFrame(columns_3)                
-print(Map_Trans)
-
-mycursor.execute("CREATE TABLE IF NOT EXISTS map_trans (State varchar(100),Year int, Quarter int, District varchar(100), Count int, Amount double)")
-for i,row in Map_Trans.iterrows():
-    sql = "INSERT INTO map_trans VALUES (%s,%s,%s,%s,%s,%s)"
-    mycursor.execute(sql,tuple(row))
-    mydb.commit()
-
-
-Path_4 =r"C:\\phonepe\\pulse\\data\\aggregated\\transaction\\country\\india\\state\\"
-map_user = os.listdir(Path_4)
-Columns_4  = {'State':[], 'Year':[], 'Quarter':[], 'District':[], 'RegisteredUser':[], 'AppOpens':[]}
-for state in map_user:
-    cur_state = Path_4 + state + "/"
-    map_year_list = os.listdir(cur_state)
-    for year in map_year_list:
-        cur_year = cur_state+year+"/"
-        map_list = os.listdir(cur_year)
-        for file in map_list:
-            cur_file = cur_year+file
-            data = open(cur_file,'r')
-            d = json.load(data)
-            try:
-                for i in d["data"]["hoverData"].items():
-                    district = i[0]
-                    registereduser = i[1]["registeredUsers"]
-                    appOpens = i[1]['appOpens']
-                    Columns_4["District"].append(district)
-                    Columns_4["RegisteredUser"].append(registereduser)
-                    Columns_4["AppOpens"].append(appOpens)
-                    Columns_4['State'].append(state)
-                    Columns_4['Year'].append(year)
-                    Columns_4['Quarter'].append(int(file.strip('.json')))
-            except:
-                pass
-data_map_User = pd.DataFrame(Columns_4)
-print(data_map_User)
-
-mycursor.execute("CREATE TABLE IF NOT EXISTS map_user (State varchar(100), Year int, Quarter int, District varchar(100), RegisteredUser int, AppOpens int)")
-
-for i, row in data_map_User.iterrows():
-    sql = ("INSERT INTO map_user (State, Year, Quarter, District, RegisteredUser, AppOpens) VALUES (%s, %s, %s, %s, %s, %s)")
-    values = (row['State'], row['Year'], row['Quarter'], row['District'], row['RegisteredUser'], row['AppOpens'])
-    mycursor.execute(sql, values)
-    mydb.commit()
-
-
-
-Path_5 =r"C:\\phonepe\\pulse\\data\\aggregated\\transaction\\country\\india\\state\\"
-top_trans_list = os.listdir(Path_5)
-Columns_5 = {'State': [], 'Year': [], 'Quarter': [], 'Pincode': [], 'Transaction_count': [],'Transaction_amount': []}
-for state in top_trans_list:
-    cur_state = Path_5 + state + "/"
-    top_year_list = os.listdir(cur_state)
-    for year in top_year_list:
-        cur_year = cur_state + year + "/"
-        top_file_list = os.listdir(cur_year)
-        for file in top_file_list:
-            cur_file = cur_year + file
-            data = open(cur_file, 'r')
-            A = json.load(data)
-            try:
-                for i in A['data']['pincodes']:
-                    name = i['entityName']
-                    count = i['metric']['count']
-                    amount = i['metric']['amount']
-                    Columns_5['Pincode'].append(name)
-                    Columns_5['Transaction_count'].append(count)
-                    Columns_5['Transaction_amount'].append(amount)
-                    Columns_5['State'].append(state)
-                    Columns_5['Year'].append(year)
-                    Columns_5['Quarter'].append(int(file.strip('.json')))
-            except:
-                pass
-df_top_trans = pd.DataFrame(Columns_5)
-print(df_top_trans)
-
-mycursor.execute("CREATE TABLE IF NOT EXISTS top_trans (State varchar(100), Year int, Quarter int, Pincode int, Transaction_count int, Transaction_Amount double)")
-for i,row in df_top_trans.iterrows():
-    sql = ("INSERT INTO top_trans VALUES (%s,%s,%s,%s,%s,%s)")
-    mycursor.execute(sql,tuple(row))
-    mydb.commit()
-
-
-Path_6 ="C:\\phonepe\\pulse\\data\\aggregated\\transaction\\country\\india\\state\\"
-user_data = os.listdir(Path_6)
-Columns_6 = {'State':[], 'Year':[], 'Quarter':[], 'Pincode':[], 'RegisteredUsers':[]}
-for state in user_data:
-    cur_state=Path_6 + state + "/"
-    Year_data = os.listdir(cur_state)
-    for year in Year_data:
-        cur_year =cur_state + year + "/"
-        Top_file = os.listdir(cur_year)
-        for file in Top_file:
-            cur_file = cur_year+file
-            data = open(cur_file,'r')
-            Data = json.load(data)
-            try:
-                for i in Data['data']['pincodes']:
-                    name = i['name']
-                    registeredUsers = i['registeredUsers']
-                    Columns_6['Pincode'].append(name)
-                    Columns_6['RegisteredUsers'].append(registeredUsers)
-                    Columns_6['State'].append(state)
-                    Columns_6['Year'].append(year)
-                    Columns_6['Quarter'].append(int(file.strip('.json')))
-            except:
-                pass
-Top_user_Data = pd.DataFrame(Columns_6)
-print(Top_user_Data)
-
-mycursor.execute("CREATE TABLE IF NOT EXISTS top_user (State varchar(100), Year int, Quarter int, Pincode int, RegisteredUsers int)")
-for i,row in Top_user_Data.iterrows():
-    sql = ("INSERT INTO top_user VALUES (%s,%s,%s,%s,%s)")
-    mycursor.execute(sql,tuple(row))
-    mydb.commit()
-
-
-df_agg_trans.to_csv('Aggregated_Trans.csv',index=False)
-df_agg_user.to_csv("Aggregated_User.csv",index=False)
-Map_Trans.to_csv("Map_Trans.csv",index=False)
-data_map_User.to_csv("Map_User_data.csv",index=False)
-df_top_trans.to_csv("Top_Trans_data.csv",index=False)
-Top_user_Data.to_csv("Top_User_data.csv",index=False)
-
-
-mycursor.execute("show tables")
-mycursor.fetchall()
-[('aggregate_user',),
- ('aggregated_trans',),
- ('map_trans',),
- ('map_user',),
- ('top_trans',),
- ('top_user',)]
-
-df_agg_trans['State'] = df_agg_trans['State'].replace({
-    'himachal-pradesh': 'Himachal Pradesh',
-    'dadra-&-nagar-haveli-&-daman-&-diu': 'Dadra and Nagar Haveli and Daman and Diu',
-    'gujarat': 'Gujarat',
-    'madhya-pradesh': 'Madhya Pradesh',
-    'arunachal-pradesh': 'Arunachal Pradesh',
-    'meghalaya': 'Meghalaya',
-    'jharkhand': 'Jharkhand',
-    'assam': 'Assam',
-    'andhra-pradesh': 'Andhra Pradesh',
-    'manipur': 'Manipur',
-    'mizoram': 'Mizoram',
-    'ladakh': 'Ladakh',
-    'chhattisgarh': 'Chhattisgarh',
-    'tripura': 'Tripura',
-    'tamil-nadu': 'Tamil Nadu',
-    'uttarakhand': 'Uttarakhand',
-    'bihar': 'Bihar',
-    'goa': 'Goa',
-    'Kerala': 'Kerala',
-    'rajasthan': 'Rajasthan',
-    'haryana': 'Haryana',
-    'nagaland': 'Nagaland',
-    'odisha': 'Odisha',
-    'uttar-pradesh': 'Uttar Pradesh',
-    'west-bengal': 'West Bengal',
-    'andaman-&-nicobar-islands': 'Andaman & Nicobar',
-    'telangana': 'Telangana',
-    'punjab': 'Punjab',
-    'delhi': 'Delhi',
-    'karnataka': 'Karnataka',
-    'jammu-&-kashmir': 'Jammu & Kashmir',
-    'maharashtra': 'Maharashtra',
-    'chandigarh': 'Chandigarh',
-    'puducherry': 'Puducherry',
-    'sikkim': 'Sikkim',
-    'lakshadweep': 'Lakshadweep'
-})
-
-state_names = df_agg_trans['State'].unique()
-state_names_df = pd.DataFrame({'state': state_names})
-
-# Save the DataFrame to a CSV file
-state_names_df.to_csv("C:\phonepe\state_names.csv", index=False)
-
-# Read the saved CSV file
-state_names_read = pd.read_csv("C:\phonepe\state_names.csv")
-print(state_names_read)
